@@ -104,6 +104,19 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+      - name: Reemplazar APK/MisClaves.apk por la release firmada
+        if: steps.signing.outputs.ready == 'true'
+        run: |
+          cp app/build/outputs/apk/release/app-release.apk APK/MisClaves.apk
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add APK/MisClaves.apk
+          if ! git diff --cached --quiet; then
+            git commit -m "Publicar APK release firmada"
+            git pull --rebase origin main
+            git push
+          fi
+
       - name: Publicar release firmada
         if: steps.signing.outputs.ready == 'true'
         uses: softprops/action-gh-release@v2
