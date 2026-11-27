@@ -36,10 +36,10 @@ jobs:
           unzip -q gradle-8.9-bin.zip
           echo "$GITHUB_WORKSPACE/gradle-8.9/bin" >> "$GITHUB_PATH"
 
-      - name: Compilar APK debug
+      - name: Compilar APK debug para pruebas
         run: gradle --no-daemon assembleDebug
 
-      - name: Guardar APK como artefacto
+      - name: Guardar APK debug como artefacto
         uses: actions/upload-artifact@v4
         with:
           name: MisClaves-debug
@@ -47,7 +47,7 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Copiar APK a la carpeta APK del repositorio
+      - name: Copiar APK debug a la carpeta APK del repositorio
         run: |
           mkdir -p APK
           cp app/build/outputs/apk/debug/app-debug.apk APK/MisClaves.apk
@@ -55,17 +55,60 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add APK/MisClaves.apk
           if ! git diff --cached --quiet; then
-            git commit -m "Publicar APK compilada en carpeta APK"
+            git commit -m "Publicar APK de pruebas"
             git push
           fi
 
-      - name: Publicar APK en la página de Releases
+      - name: Comprobar si existe la firma privada
+        id: signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [[ -n "$KEYSTORE_BASE64" && -n "$KEYSTORE_PASSWORD" && -n "$KEY_ALIAS" && -n "$KEY_PASSWORD" ]]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "Firma permanente aún no configurada; se omite la publicación release."
+          fi
+
+      - name: Preparar archivo de firma
+        if: steps.signing.outputs.ready == 'true'
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/misclaves-release.jks"
+          test -s "$RUNNER_TEMP/misclaves-release.jks"
+
+      - name: Compilar APK release firmada
+        if: steps.signing.outputs.ready == 'true'
+        env:
+          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/misclaves-release.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          VERSION_CODE: ${{ github.run_number }}
+          VERSION_NAME: 1.${{ github.run_number }}
+        run: gradle --no-daemon assembleRelease
+
+      - name: Guardar APK release firmada como artefacto
+        if: steps.signing.outputs.ready == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: MisClaves-release-firmada
+          path: app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publicar release firmada
+        if: steps.signing.outputs.ready == 'true'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: latest
-          name: Mis Claves - APK más reciente
+          tag_name: v1.${{ github.run_number }}
+          name: Mis Claves v1.${{ github.run_number }}
           target_commitish: main
-          files: app/build/outputs/apk/debug/app-debug.apk
-          overwrite_files: true
+          files: app/build/outputs/apk/release/app-release.apk
           make_latest: true
           generate_release_notes: false
