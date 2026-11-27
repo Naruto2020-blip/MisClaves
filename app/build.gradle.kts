@@ -12,8 +12,36 @@ android {
         applicationId = "com.misclaves.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = (System.getenv("VERSION_CODE") ?: "1").toInt()
+        versionName = System.getenv("VERSION_NAME") ?: "1.0"
+    }
+
+    signingConfigs {
+        create("release") {
+            val storePath = System.getenv("ANDROID_KEYSTORE_PATH")
+            val storePass = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+            val keyAliasValue = System.getenv("ANDROID_KEY_ALIAS")
+            val keyPass = System.getenv("ANDROID_KEY_PASSWORD")
+            if (!storePath.isNullOrBlank() && !storePass.isNullOrBlank() &&
+                !keyAliasValue.isNullOrBlank() && !keyPass.isNullOrBlank()) {
+                storeFile = file(storePath)
+                storePassword = storePass
+                keyAlias = keyAliasValue
+                keyPassword = keyPass
+            }
+        }
+    }
+
+    buildTypes {
+        getByName("release") {
+            val signingReady = listOf(
+                "ANDROID_KEYSTORE_PATH", "ANDROID_KEYSTORE_PASSWORD",
+                "ANDROID_KEY_ALIAS", "ANDROID_KEY_PASSWORD"
+            ).all { !System.getenv(it).isNullOrBlank() }
+            if (signingReady) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+        }
     }
 
     compileOptions {
