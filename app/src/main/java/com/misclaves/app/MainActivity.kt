@@ -23,6 +23,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -35,6 +36,8 @@ import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
+import android.widget.Toast
+import kotlinx.coroutines.launch
 
 data class VaultItem(val id: Long, val title: String, val username: String, val password: String, val website: String, val notes: String)
 
@@ -99,6 +102,22 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun MisClavesApp(store: VaultStore) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var availableUpdate by remember { mutableStateOf<AppUpdate?>(null) }
+    var updateError by remember { mutableStateOf<String?>(null) }
+    var checkingUpdate by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        checkingUpdate = true
+        try {
+            availableUpdate = UpdateManager.check(context)
+        } catch (_: Exception) {
+            // Un fallo de red no debe impedir abrir la bóveda.
+        } finally {
+            checkingUpdate = false
+        }
+    }
     var dark by remember { mutableStateOf(false) }
     val colors = if (dark) darkColorScheme(primary = androidx.compose.ui.graphics.Color(0xFFB7A8FF), surface = androidx.compose.ui.graphics.Color(0xFF191B2B), background = androidx.compose.ui.graphics.Color(0xFF111321))
         else lightColorScheme(primary = androidx.compose.ui.graphics.Color(0xFF5546B8), surface = androidx.compose.ui.graphics.Color(0xFFFFFFFF), background = androidx.compose.ui.graphics.Color(0xFFF5F6FC))
@@ -109,7 +128,22 @@ fun MisClavesApp(store: VaultStore) {
         var editing by remember { mutableStateOf<VaultItem?>(null) }
         val clipboard = LocalClipboardManager.current
         Scaffold(
-            topBar = { TopAppBarCompat(dark = dark, onTheme = { dark = !dark }) },
+            topBar = {
+                TopAppBarCompat(dark = dark, onTheme = { dark = !dark }, onCheckUpdate = {
+                    scope.launch {
+                        checkingUpdate = true
+                        updateError = null
+                        try {
+                            availableUpdate = UpdateManager.check(context)
+                            if (availableUpdate == null) Toast.makeText(context, "Ya tienes la última versión.", Toast.LENGTH_SHORT).show()
+                        } catch (_: Exception) {
+                            updateError = "No se pudo comprobar si hay actualizaciones. Revisa tu conexión."
+                        } finally {
+                            checkingUpdate = false
+                        }
+                    }
+                })
+            },
             floatingActionButton = {
                 FloatingActionButton(onClick = { editing = null; showEditor = true }) {
                     Icon(Icons.Default.Add, contentDescription = "Añadir cuenta")
@@ -162,6 +196,39 @@ fun MisClavesApp(store: VaultStore) {
                 }
             }
         }
+        if (availableUpdate != null) {
+            val update = availableUpdate!!
+            AlertDialog(
+                onDismissRequest = { availableUpdate = null },
+                title = { Text("Actualización disponible") },
+                text = { Text("Hay una nueva versión (${update.versionName}) de Mis Claves. ¿Quieres descargarla e instalarla?") },
+                confirmButton = {
+                    TextButton(enabled = !checkingUpdate, onClick = {
+                        scope.launch {
+                            checkingUpdate = true
+                            updateError = null
+                            try {
+                                UpdateManager.downloadAndInstall(context, update)
+                                availableUpdate = null
+                            } catch (e: Exception) {
+                                updateError = e.message ?: "No se pudo iniciar la actualización."
+                            } finally {
+                                checkingUpdate = false
+                            }
+                        }
+                    }) { Text(if (checkingUpdate) "Procesando…" else "Descargar e instalar") }
+                },
+                dismissButton = { TextButton(onClick = { availableUpdate = null }) { Text("Más tarde") } }
+            )
+        }
+        if (updateError != null) {
+            AlertDialog(
+                onDismissRequest = { updateError = null },
+                title = { Text("No se pudo actualizar") },
+                text = { Text(updateError!!) },
+                confirmButton = { TextButton(onClick = { updateError = null }) { Text("Aceptar") } }
+            )
+        }
         if (showEditor) {
             ItemEditor(initial = editing, onDismiss = { showEditor = false }, onSave = { item ->
                 entries = if (editing == null) entries + item else entries.map { if (it.id == item.id) item else it }
@@ -173,8 +240,9 @@ fun MisClavesApp(store: VaultStore) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TopAppBarCompat(dark: Boolean, onTheme: () -> Unit) {
+fun TopAppBarCompat(dark: Boolean, onTheme: () -> Unit, onCheckUpdate: () -> Unit) {
     TopAppBar(title = { Text("Mis Claves") }, actions = {
+        TextButton(onClick = onCheckUpdate) { Text("Actualizar") }
         TextButton(onClick = onTheme) { Text(if (dark) "Claro" else "Oscuro") }
     })
 }
