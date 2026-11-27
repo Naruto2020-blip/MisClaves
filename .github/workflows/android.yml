@@ -3,6 +3,8 @@ name: Construir APK de Mis Claves
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - 'APK/MisClaves.apk'
   workflow_dispatch:
 
 permissions:
