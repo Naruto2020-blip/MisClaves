@@ -2,6 +2,12 @@
 
 Aplicación Android independiente para organizar usuarios y contraseñas.
 
+## Descargar la APK
+
+**[Descargar la APK más reciente de Mis Claves](https://github.com/Naruto2020-blip/MisClaves/releases/latest/download/app-debug.apk)**
+
+El enlace se actualizará automáticamente cada vez que una compilación termine correctamente. Si todavía no hay una compilación exitosa, espera a que finalice el flujo de GitHub Actions.
+
 ## Estado actual
 
 Esta es una **versión inicial de desarrollo**. Incluye una interfaz en español, tema claro/oscuro, alta/edición/eliminación y búsqueda de registros, copia al portapapeles y almacenamiento local cifrado con AES-GCM mediante una clave de Android Keystore.
@@ -10,10 +16,7 @@ Esta es una **versión inicial de desarrollo**. Incluye una interfaz en español
 
 Cada cambio en la rama `main` inicia el flujo **Construir APK de Mis Claves**. También se puede iniciar manualmente desde la pestaña **Actions**.
 
-Cuando termine correctamente:
-1. Abre la ejecución más reciente en **Actions**.
-2. Busca **Artifacts**.
-3. Descarga `MisClaves-debug`; contiene `app-debug.apk`.
+Cuando termine correctamente, el flujo guarda la APK como artefacto y la publica en **Releases**. El enlace de descarga de arriba siempre apunta a la publicación más reciente.
 
 ## Seguridad: importante
 
